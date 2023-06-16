@@ -80,7 +80,7 @@ message Request {
     /// Request ID
     uint64 id = 1;
     /// The generation context
-    string inputs = 2;
+    string instances = 2;
     /// Context truncation
     uint32 truncate = 3;
     /// Next Token Chooser Parameters

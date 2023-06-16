@@ -137,7 +137,7 @@ async fn prefill(
         .map(|id| Request {
             id: id.into(),
             prefill_logprobs: false,
-            inputs: sequence.clone(),
+            instances: sequence.clone(),
             truncate: sequence_length,
             parameters: Some(parameters.clone()),
             stopping_parameters: Some(StoppingCriteriaParameters {

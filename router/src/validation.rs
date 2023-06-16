@@ -66,7 +66,7 @@ impl Validation {
     #[instrument(skip_all)]
     async fn validate_input(
         &self,
-        inputs: String,
+        instances: String,
         truncate: Option<usize>,
         max_new_tokens: u32,
     ) -> Result<(String, usize), ValidationError> {
@@ -77,12 +77,12 @@ impl Validation {
             // Send request to the background validation task
             // Unwrap is safe here
             sender
-                .send(((inputs, truncate), response_sender, Span::current()))
+                .send(((instances, truncate), response_sender, Span::current()))
                 .unwrap();
 
             // Await on response channel
             // Unwrap is safe here
-            let (inputs, input_length) = response_receiver.await.unwrap()?;
+            let (instances, input_length) = response_receiver.await.unwrap()?;
 
             // Get total tokens
             let total_tokens = input_length + max_new_tokens as usize;
@@ -105,12 +105,12 @@ impl Validation {
             }
 
             metrics::histogram!("tgi_request_input_length", input_length as f64);
-            Ok((inputs, input_length))
+            Ok((instances, input_length))
         }
-        // Return inputs without validation
+        // Return instances without validation
         else {
-            // In this case, we don't know the real length in tokens of the inputs
-            // However, the inputs will be truncated by the python servers
+            // In this case, we don't know the real length in tokens of the instances
+            // However, the instances will be truncated by the python servers
             // We make sure that truncate + max_new_tokens <= self.max_total_tokens
             let input_length = truncate.unwrap_or(self.max_input_length);
 
@@ -122,7 +122,7 @@ impl Validation {
                 ));
             }
 
-            Ok((inputs, input_length))
+            Ok((instances, input_length))
         }
     }
 
@@ -222,8 +222,8 @@ impl Validation {
             }
         };
 
-        // Check if inputs is empty
-        if request.inputs.is_empty() {
+        // Check if instances is empty
+        if request.instances.is_empty() {
             return Err(EmptyInput);
         }
 
@@ -237,9 +237,9 @@ impl Validation {
             })
             .unwrap_or(Ok(None))?;
 
-        // Validate inputs
-        let (inputs, input_length) = self
-            .validate_input(request.inputs, truncate, max_new_tokens)
+        // Validate instances
+        let (instances, input_length) = self
+            .validate_input(request.instances, truncate, max_new_tokens)
             .await?;
 
         let parameters = NextTokenChooserParameters {
@@ -261,7 +261,7 @@ impl Validation {
         metrics::histogram!("tgi_request_max_new_tokens", max_new_tokens as f64);
 
         Ok(ValidGenerateRequest {
-            inputs,
+            instances,
             decoder_input_details,
             input_length: input_length as u32,
             truncate: truncate.unwrap_or(self.max_input_length) as u32,
@@ -288,10 +288,10 @@ impl Validation {
 /// Start tokenization workers
 fn tokenizer_worker(tokenizer: Tokenizer, receiver: flume::Receiver<TokenizerRequest>) {
     // Loop over requests
-    while let Ok(((inputs, truncate), response_tx, parent_span)) = receiver.recv() {
+    while let Ok(((instances, truncate), response_tx, parent_span)) = receiver.recv() {
         parent_span.in_scope(|| {
             response_tx
-                .send(prepare_input(inputs, truncate, &tokenizer))
+                .send(prepare_input(instances, truncate, &tokenizer))
                 .unwrap_or(())
         })
     }
@@ -299,31 +299,31 @@ fn tokenizer_worker(tokenizer: Tokenizer, receiver: flume::Receiver<TokenizerReq
 
 /// Get input length and optionally truncate it
 fn prepare_input(
-    inputs: String,
+    instances: String,
     truncate: Option<usize>,
     tokenizer: &Tokenizer,
 ) -> Result<(String, usize), ValidationError> {
     // Get the number of tokens in the input
     let mut encoding = tokenizer
-        .encode(inputs.clone(), true)
+        .encode(instances.clone(), true)
         .map_err(|err| ValidationError::Tokenizer(err.to_string()))?;
 
     // Optionally truncate
-    let (inputs, input_length) = match truncate {
+    let (instances, input_length) = match truncate {
         // Truncate is some and < encoding length
         Some(truncate) if truncate < encoding.len() => {
-            // truncate encoding and decode new inputs
+            // truncate encoding and decode new instances
             encoding.truncate(truncate, 0, TruncationDirection::Left);
-            let inputs = tokenizer
+            let instances = tokenizer
                 .decode(Vec::from(encoding.get_ids()), false)
                 .map_err(|err| ValidationError::Tokenizer(err.to_string()))?;
-            (inputs, encoding.len())
+            (instances, encoding.len())
         }
         // Nothing to do
-        _ => (inputs, encoding.len()),
+        _ => (instances, encoding.len()),
     };
 
-    Ok((inputs, input_length))
+    Ok((instances, input_length))
 }
 
 type TokenizerRequest = (
@@ -334,7 +334,7 @@ type TokenizerRequest = (
 
 #[derive(Debug)]
 pub(crate) struct ValidGenerateRequest {
-    pub inputs: String,
+    pub instances: String,
     pub input_length: u32,
     pub truncate: u32,
     pub decoder_input_details: bool,
@@ -372,11 +372,11 @@ pub enum ValidationError {
     NegativeMaxNewTokens,
     #[error("`max_new_tokens` must be <= {0}. Given: {1}")]
     MaxNewTokens(usize, u32),
-    #[error("`inputs` tokens + `max_new_tokens` must be <= {0}. Given: {1} `inputs` tokens and {2} `max_new_tokens`")]
+    #[error("`instances` tokens + `max_new_tokens` must be <= {0}. Given: {1} `instances` tokens and {2} `max_new_tokens`")]
     MaxTotalTokens(usize, usize, u32),
-    #[error("`inputs` must have less than {0} tokens. Given: {1}")]
+    #[error("`instances` must have less than {0} tokens. Given: {1}")]
     InputLength(usize, usize),
-    #[error("`inputs` cannot be empty")]
+    #[error("`instances` cannot be empty")]
     EmptyInput,
     #[error("`stop` supports up to {0} stop sequences. Given: {1}")]
     StopSequence(usize, usize),
@@ -462,7 +462,7 @@ mod tests {
         );
         match validation
             .validate(GenerateRequest {
-                inputs: "Hello".to_string(),
+                instances: "Hello".to_string(),
                 parameters: GenerateParameters {
                     best_of: Some(2),
                     do_sample: false,
@@ -494,7 +494,7 @@ mod tests {
         );
         match validation
             .validate(GenerateRequest {
-                inputs: "Hello".to_string(),
+                instances: "Hello".to_string(),
                 parameters: GenerateParameters {
                     top_p: Some(1.0),
                     ..default_parameters()
@@ -508,7 +508,7 @@ mod tests {
 
         match validation
             .validate(GenerateRequest {
-                inputs: "Hello".to_string(),
+                instances: "Hello".to_string(),
                 parameters: GenerateParameters {
                     top_p: Some(0.99),
                     max_new_tokens: 1,
@@ -523,7 +523,7 @@ mod tests {
 
         let valid_request = validation
             .validate(GenerateRequest {
-                inputs: "Hello".to_string(),
+                instances: "Hello".to_string(),
                 parameters: GenerateParameters {
                     top_p: None,
                     max_new_tokens: 1,

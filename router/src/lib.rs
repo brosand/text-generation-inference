@@ -164,7 +164,7 @@ fn default_parameters() -> GenerateParameters {
 #[derive(Clone, Debug, Deserialize, ToSchema)]
 pub(crate) struct GenerateRequest {
     #[schema(example = "My name is Olivier and I")]
-    pub inputs: String,
+    pub instances: String,
     #[serde(default = "default_parameters")]
     pub parameters: GenerateParameters,
 }
@@ -172,7 +172,7 @@ pub(crate) struct GenerateRequest {
 #[derive(Clone, Debug, Deserialize, ToSchema)]
 pub(crate) struct CompatGenerateRequest {
     #[schema(example = "My name is Olivier and I")]
-    pub inputs: String,
+    pub instances: String,
     #[serde(default = "default_parameters")]
     pub parameters: GenerateParameters,
     #[serde(default)]
@@ -183,7 +183,7 @@ pub(crate) struct CompatGenerateRequest {
 impl From<CompatGenerateRequest> for GenerateRequest {
     fn from(req: CompatGenerateRequest) -> Self {
         Self {
-            inputs: req.inputs,
+            instances: req.instances,
             parameters: req.parameters,
         }
     }

@@ -202,7 +202,7 @@ impl State {
             batch_requests.push(Request {
                 id,
                 prefill_logprobs: entry.request.decoder_input_details,
-                inputs: entry.request.inputs.clone(),
+                instances: entry.request.instances.clone(),
                 truncate: entry.request.truncate,
                 parameters: Some(entry.request.parameters.clone()),
                 stopping_parameters: Some(entry.request.stopping_parameters.clone()),
@@ -279,7 +279,7 @@ mod tests {
 
         let entry = Entry {
             request: ValidGenerateRequest {
-                inputs: "".to_string(),
+                instances: "".to_string(),
                 input_length: 0,
                 truncate: 0,
                 decoder_input_details: false,
