@@ -152,12 +152,12 @@ async fn generate(
     let start_time = Instant::now();
     metrics::increment_counter!("tgi_request_count");
 
-    tracing::debug!("Input: {}", req.0.inputs);
+    tracing::debug!("Input: {}", req.0.instances);
 
-    let compute_characters = req.0.inputs.chars().count();
+    let compute_characters = req.0.instances.chars().count();
     let mut add_prompt = None;
     if req.0.parameters.return_full_text.unwrap_or(false) {
-        add_prompt = Some(req.0.inputs.clone());
+        add_prompt = Some(req.0.instances.clone());
     }
 
     let details = req.0.parameters.details || req.0.parameters.decoder_input_details;
@@ -341,9 +341,9 @@ async fn generate_stream(
     let start_time = Instant::now();
     metrics::increment_counter!("tgi_request_count");
 
-    tracing::debug!("Input: {}", req.0.inputs);
+    tracing::debug!("Input: {}", req.0.instances);
 
-    let compute_characters = req.0.inputs.chars().count();
+    let compute_characters = req.0.instances.chars().count();
 
     let mut headers = HeaderMap::new();
     headers.insert("x-compute-type", "gpu+optimized".parse().unwrap());
@@ -359,7 +359,7 @@ async fn generate_stream(
 
         let mut add_prompt = None;
         if req.0.parameters.return_full_text.unwrap_or(false) {
-            add_prompt = Some(req.0.inputs.clone());
+            add_prompt = Some(req.0.instances.clone());
         }
         let details = req.0.parameters.details;
 
